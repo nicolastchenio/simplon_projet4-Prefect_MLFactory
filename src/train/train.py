@@ -1,21 +1,20 @@
 from dotenv import load_dotenv
 import os
+import argparse
 import mlflow
 import mlflow.sklearn
 from mlflow.tracking import MlflowClient
 import boto3
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
-# from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 
-
-load_dotenv()  # charge automatiquement les variables depuis .env
+load_dotenv()
 mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
 
-def prepare_minio():
-    """Vérifie si le bucket mlflow existe sinon le crée"""
 
+def prepare_minio():
     s3 = boto3.client(
         "s3",
         endpoint_url=os.environ["MLFLOW_S3_ENDPOINT_URL"],
@@ -30,8 +29,9 @@ def prepare_minio():
         print("Bucket 'mlflow' créé")
 
 
-def train_and_register():
+def train_and_register(model_type, production=False):
     mlflow.set_experiment("iris_experiment")
+
     iris = load_iris()
     X_train, X_test, y_train, y_test = train_test_split(
         iris.data,
@@ -40,36 +40,62 @@ def train_and_register():
         random_state=42
     )
 
-    # model = LogisticRegression(max_iter=200)
-    model = RandomForestClassifier()
+    if model_type == "logistic":
+        model = LogisticRegression(max_iter=200)
+    elif model_type == "randomforest":
+        model = RandomForestClassifier()
+    else:
+        raise ValueError("Model type must be 'logistic' or 'randomforest'")
 
     with mlflow.start_run():
         model.fit(X_train, y_train)
         accuracy = model.score(X_test, y_test)
-        mlflow.log_param("model_type", "LogisticRegression")
+
+        mlflow.log_param("model_type", model_type)
         mlflow.log_metric("accuracy", accuracy)
+
         model_name = "iris_model"
+
         mlflow.sklearn.log_model(
             sk_model=model,
             artifact_path="model",
             registered_model_name=model_name
         )
 
-    client = MlflowClient()
-    latest_version = client.get_latest_versions(
-        model_name,
-        stages=["None"]
-    )[0].version
+    if production:
+        client = MlflowClient()
+        latest_version = client.get_latest_versions(
+            model_name,
+            stages=["None"]
+        )[0].version
 
-    # client.set_registered_model_alias(
-    #     model_name,
-    #     "production",
-    #     latest_version
-    # )
+        client.set_registered_model_alias(
+            model_name,
+            "production",
+            latest_version
+        )
 
-    print("Modèle enregistré. Version:", latest_version)
+        print("Modèle mis en production. Version:", latest_version)
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        choices=["logistic", "randomforest"],
+        help="Type de modèle à entraîner"
+    )
+
+    parser.add_argument(
+        "--production",
+        action="store_true",
+        help="Mettre le modèle en production"
+    )
+
+    args = parser.parse_args()
+
     prepare_minio()
-    train_and_register()
+    train_and_register(args.model, args.production)
