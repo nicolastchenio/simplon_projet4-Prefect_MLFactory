@@ -1,0 +1,43 @@
+services:
+  ### 1. LA BASE DE DONNÉES
+  database:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=prefect
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=prefect
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - prefect-network
+
+  ### 2. LE SERVEUR PREFECT
+  server:
+    image: prefecthq/prefect:3-latest
+    restart: always
+    volumes:
+      - prefect_data:/root/.prefect
+    entrypoint: ["prefect", "server", "start"]
+    environment:
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://prefect:${POSTGRES_PASSWORD}@database:5432/prefect
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_URL=http://server:4200/api
+      - PREFECT_UI_API_URL=http://localhost:4200/api
+    ports:
+      - "4200:4200"
+    depends_on:
+      - database
+    networks:
+      - prefect-network
+
+  # Les workers sont lancés séparément sur chaque serveur :
+  # PREFECT_API_URL="http://<ip-serveur>:4200/api" prefect worker start --pool "docker-pool"
+
+networks:
+  prefect-network:
+    driver: bridge
+
+volumes:
+  db_data:
+  prefect_data:

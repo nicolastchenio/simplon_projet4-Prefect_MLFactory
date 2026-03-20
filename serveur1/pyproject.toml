@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Le nouveau nom pour casser le cache du serveur
+name = "docker-compose-prefect-deploiement"
+version = "0.1.0"
+description = "TP Final Data Engineering avec Prefect 3"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "prefect>=3.0.0",
+    "prefect-docker",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "httpx>=0.23.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["flows*"]
