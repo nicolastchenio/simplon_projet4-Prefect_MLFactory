@@ -1,0 +1,14 @@
+[project]
+name = "simplon-projet3-mlfactory"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "boto3>=1.42.68",
+    "mlflow>=3.10.1",
+    "pandas>=2.3.3",
+    "python-dotenv>=1.2.2",
+    "scikit-learn>=1.8.0",
+    "streamlit>=1.55.0",
+]
