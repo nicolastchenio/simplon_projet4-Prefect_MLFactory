@@ -1,3 +1,32 @@
+1. Préparation de l'environnement
+Vous devez ajouter Prefect à votre projet. Comme vous utilisez uv, lancez :
+```
+uv add prefect
+```
+
+2. Adaptation de l'Infrastructure (Serveur 2)
+Le "Serveur 2" est votre stack Docker actuelle. Gardez MinIO et MLflow actifs via votre docker-compose.yml.
+* Assurez-vous qu'ils tournent bien : docker-compose up -d minio mlflow.
+* L'API et le Front ne sont pas strictement nécessaires pour l'étape Prefect, mais vous pouvez les laisser pour valider la prédiction finale.
+
+3. Transformation de src/train/train.py en Prefect Flow
+Vous devez modifier votre script d'entraînement pour qu'il soit reconnu par Prefect. Voici la structure à adopter :
+
+* Décorateurs : Utilisez @task pour les étapes (préparation MinIO, entraînement) et @flow pour orchestrer le tout.
+* Tracking Distant : Gardez mlflow.set_tracking_uri("http://localhost:5000") (ou l'IP de votre serveur 2 si c'est une autre machine).
+* Automatisation : Utilisez la méthode .serve() à la fin du script.
+
+4. Lancement de l'Orchestration (Serveur 1)
+   1. Démarrer Prefect : Dans un nouveau terminal, lancez le serveur Prefect pour accéder à l'interface :
+      prefect server start
+      (Accessible sur http://localhost:4200)
+   2. Déployer le Flow : Lancez votre script train.py modifié. Il restera en attente et enverra des instructions au serveur Prefect toutes les 5 minutes grâce au paramètre cron.
+
+# train\train.py #
+
+modification du fichier train.py
+
+```
 import os
 import mlflow
 import mlflow.sklearn
@@ -99,3 +128,38 @@ if __name__ == "__main__":
         cron="*/5 * * * *",
         description="Déploiement d'entraînement Iris automatique toutes les 5 minutes."
     )
+```
+
+# a faire #
+
+Le fichier src/train/train.py est maintenant prêt pour l'orchestration Prefect.
+
+  Voici les étapes à suivre pour valider votre installation (Étape 3 du projet) :
+
+  1. Lancez l'infrastructure (Serveur 2)
+  Assurez-vous que vos conteneurs MLflow et MinIO sont bien démarrés :
+  ```
+  docker-compose up -d minio mlflow
+  ```
+  - MinIO accessible sur http://localhost:9000 avec login/password du .env
+  - MLflow accessible sur http://localhost:5000
+
+  2. Démarrez le serveur Prefect (Serveur 1)
+  Ouvrez un nouveau terminal et lancez le serveur Prefect pour accéder au tableau de bord :
+  ```
+  uv run prefect server start
+  ```
+  L'interface sera accessible sur http://localhost:4200.
+
+  1. Lancez le script d'entraînement
+  Dans votre terminal principal, exécutez le script. Il va s'enregistrer auprès du serveur Prefect et rester en attente :
+  ```
+  uv run python src/train/train.py
+  ```
+
+  1. Validation
+   2. Sur Prefect (Port 4200) : Allez dans l'onglet "Deployments". Vous devriez voir Iris ML Pipeline/iris-training-deployment. Cliquez dessus pour voir les prochaines exécutions prévues (toutes les 5 minutes).
+   3. Sur MLflow (Port 5000) : Après la première exécution (immédiate ou après 5 min), vérifiez l'expérience iris_experiment_prefect. Vous devriez y voir vos métriques d'accuracy et votre modèle enregistré sous iris_model_prefect avec l'alias Production.
+
+  Note : Pour que l'API et le Front fonctionnent avec ce nouveau modèle, n'oubliez pas de mettre à jour la variable d'environnement MODEL_NAME dans votre
+  fichier .env pour qu'elle pointe vers iris_model_prefect au lieu de iris_model.
